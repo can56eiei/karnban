@@ -44,14 +44,14 @@ export default function HomeworkRealtime() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newForm, setNewForm] = useState({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
 
-  // ── Admin Login State ──
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const ADMIN_PASSWORD = "admin123";
 
-  // ── 1. Real-time Sync with Firebase ──
+  // ── 1. Real-time Sync ──
   useEffect(() => {
     const submissionsRef = ref(database, 'submissions');
     const unsubscribe = onValue(submissionsRef, (snapshot) => {
@@ -69,7 +69,7 @@ export default function HomeworkRealtime() {
     return () => unsubscribe();
   }, []);
 
-  // ── 2. Actions ──
+  // ── 2. Admin Actions ──
   const handleLogin = () => {
     if (passwordInput === ADMIN_PASSWORD) {
       setIsAdmin(true);
@@ -77,34 +77,6 @@ export default function HomeworkRealtime() {
       setPasswordInput("");
     } else {
       alert("รหัสผ่านไม่ถูกต้อง");
-    }
-  };
-
-  const submitNew = async () => {
-    // ตรวจสอบข้อมูล
-    if (!newForm.title.trim()) return alert("กรุณาใส่หัวข้อใบงาน");
-    if (!newForm.student.trim()) return alert("กรุณาใส่ชื่อนักเรียน");
-    if (!uploadedImageUrl) return alert("กรุณาอัปโหลดรูปภาพให้เสร็จสิ้นก่อนส่ง");
-
-    try {
-      const submissionsRef = ref(database, 'submissions');
-      const newSubmissionRef = push(submissionsRef);
-      
-      await set(newSubmissionRef, {
-        ...newForm,
-        status: "pending",
-        date: new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }),
-        thumb: uploadedImageUrl,
-      });
-
-      // Reset Form
-      setNewForm({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
-      setUploadedImageUrl(null);
-      setShowUploadForm(false);
-      alert("ส่งใบงานสำเร็จแล้ว!");
-    } catch (error) {
-      console.error("Firebase Error:", error);
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
   };
 
@@ -120,181 +92,183 @@ export default function HomeworkRealtime() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 font-sans">
-      <header className="max-w-6xl mx-auto flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border">
-        <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-2 rounded-lg text-white"><Icon name="check" size={20} /></div>
-            <h1 className="text-xl font-bold text-slate-800">HW-Store</h1>
-        </div>
-        <div className="flex gap-2">
-            {!isAdmin ? (
-                <button onClick={() => setShowLoginModal(true)} className="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
-                    <Icon name="lock" size={14} /> เข้า Admin
-                </button>
-            ) : (
-                <button onClick={() => setIsAdmin(false)} className="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition">
-                    <Icon name="logout" size={14} /> ออกจากระบบ
-                </button>
-            )}
-        </div>
-      </header>
+  // ── 3. Submission Actions ──
+  const submitNew = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving || isUploading) return;
+    if (!newForm.title.trim() || !newForm.student.trim() || !uploadedImageUrl) {
+        alert("กรุณากรอกข้อมูลให้ครบและรออัปโหลดรูปภาพครับ");
+        return;
+    }
 
-      <main className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-bold text-slate-700">รายการใบงาน</h2>
-            <button onClick={() => setShowUploadForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition">
-                <Icon name="plus" size={18} /> ส่งใบงานใหม่
-            </button>
+    setIsSaving(true);
+    try {
+      const submissionsRef = ref(database, 'submissions');
+      const newSubmissionRef = push(submissionsRef);
+      await set(newSubmissionRef, {
+        ...newForm,
+        status: "pending",
+        date: new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }),
+        thumb: uploadedImageUrl,
+      });
+      setNewForm({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
+      setUploadedImageUrl(null);
+      setShowUploadForm(false);
+      alert("ส่งใบงานสำเร็จแล้ว!");
+    } catch (error: any) {
+      alert("เกิดข้อผิดพลาด: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
+          <div className="flex items-center gap-2 font-black text-xl text-blue-600">
+            <div className="bg-blue-600 text-white p-1 rounded-lg"><Icon name="check" size={20} /></div>
+            <span>HW-STORE</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <button onClick={() => setIsAdmin(false)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-600 flex items-center gap-1">
+                <Icon name="logout" size={12} /> ออกจากระบบ
+              </button>
+            ) : (
+              <button onClick={() => setShowLoginModal(true)} className="text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 flex items-center gap-1">
+                <Icon name="lock" size={12} /> ADMIN
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h2 className="text-2xl font-bold">ใบงานที่ส่งแล้ว</h2>
+            <p className="text-slate-500 text-sm">ข้อมูลอัปเดตแบบ Real-time ทันทีที่มีคนส่ง</p>
+          </div>
+          <button onClick={() => setShowUploadForm(true)} className="w-full md:w-auto bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2">
+            <Icon name="plus" size={20} /> ส่งใบงานใหม่
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {submissions.map((item) => (
-                <div key={item.id} className="bg-white rounded-2xl overflow-hidden border shadow-sm group">
-                    <div className="relative h-48 overflow-hidden bg-slate-100">
-                        <img src={item.thumb} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={item.title} />
-                        <div className="absolute top-3 right-3">
-                            <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm ${
-                                item.status === 'approved' ? 'bg-green-500 text-white' : 
-                                item.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
-                            }`}>
-                                {item.status === 'approved' ? 'อนุมัติแล้ว' : item.status === 'rejected' ? 'ปฏิเสธ' : 'รออนุมัติ'}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="p-4">
-                        <h3 className="font-bold text-slate-800 truncate mb-1">{item.title}</h3>
-                        <p className="text-xs text-slate-500 mb-4">{item.student} · {item.class} · เลขที่ {item.no}</p>
-                        
-                        {isAdmin && (
-                            <div className="flex gap-2 border-t pt-3">
-                                <button onClick={() => updateStatus(item.id, 'approved')} className="flex-1 bg-green-50 text-green-600 text-xs font-bold py-2 rounded-lg hover:bg-green-100 transition">อนุมัติ</button>
-                                <button onClick={() => updateStatus(item.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 text-xs font-bold py-2 rounded-lg hover:bg-red-100 transition">ปฏิเสธ</button>
-                                <button onClick={() => deleteItem(item.id)} className="bg-slate-100 text-slate-500 p-2 rounded-lg hover:bg-red-50 hover:text-red-500 transition"><Icon name="trash" size={14} /></button>
-                            </div>
-                        )}
-                    </div>
+          {submissions.map((item) => (
+            <div key={item.id} className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 group">
+              <div className="relative h-56 overflow-hidden">
+                <img src={item.thumb} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" alt={item.title} />
+                <div className="absolute top-4 right-4">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase shadow-lg ${
+                    item.status === 'approved' ? 'bg-green-500 text-white' : 
+                    item.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    {item.status === 'approved' ? 'อนุมัติแล้ว' : item.status === 'rejected' ? 'ปฏิเสธ' : 'รออนุมัติ'}
+                  </span>
                 </div>
-            ))}
-            {submissions.length === 0 && (
-                <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-slate-300">
-                    <p className="text-slate-400">ยังไม่มีข้อมูลใบงานในขณะนี้</p>
+              </div>
+              <div className="p-5">
+                <h3 className="font-bold text-lg mb-1 truncate">{item.title}</h3>
+                <div className="flex items-center gap-2 text-slate-500 text-sm mb-4">
+                  <span>{item.student}</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                  <span>{item.class}</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                  <span>เลขที่ {item.no}</span>
                 </div>
-            )}
+                {isAdmin && (
+                  <div className="flex gap-2 pt-4 border-t border-slate-50">
+                    <button onClick={() => updateStatus(item.id, 'approved')} className="flex-1 bg-green-50 text-green-600 py-2 rounded-xl font-bold text-xs hover:bg-green-600 hover:text-white transition-colors">อนุมัติ</button>
+                    <button onClick={() => updateStatus(item.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 py-2 rounded-xl font-bold text-xs hover:bg-red-600 hover:text-white transition-colors">ปฏิเสธ</button>
+                    <button onClick={() => deleteItem(item.id)} className="px-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-red-50 hover:text-red-500 transition-colors">
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </main>
 
-      {/* Login Modal */}
       {showLoginModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl">
-                <h3 className="text-xl font-extrabold text-slate-800 mb-2">เข้าสู่โหมด Admin</h3>
-                <p className="text-sm text-slate-500 mb-6">กรุณาใส่รหัสผ่านเพื่อจัดการข้อมูล</p>
-                <input 
-                    type="password" 
-                    placeholder="รหัสผ่าน" 
-                    className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 mb-4 focus:border-blue-500 outline-none transition"
-                    value={passwordInput}
-                    onChange={e => setPasswordInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                    autoFocus
-                />
-                <div className="flex gap-3">
-                    <button onClick={handleLogin} className="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">เข้าสู่ระบบ</button>
-                    <button onClick={() => setShowLoginModal(false)} className="px-6 py-3 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition">ยกเลิก</button>
-                </div>
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowLoginModal(false)}></div>
+          <div className="relative bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl">
+            <h3 className="text-2xl font-black mb-2">Admin Login</h3>
+            <p className="text-slate-500 text-sm mb-6">รหัสผ่านเริ่มต้น: admin123</p>
+            <input type="password" px-5 py-4 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 mb-4 outline-none focus:border-blue-500" placeholder="••••••••" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus />
+            <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg">เข้าสู่ระบบ</button>
+          </div>
         </div>
       )}
 
-      {/* Upload Form Modal */}
       {showUploadForm && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-            <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-                <h3 className="text-xl font-extrabold text-slate-800 mb-6">ส่งใบงานใหม่</h3>
-                
-                <div className="space-y-4 mb-6">
-                    <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">หัวข้อใบงาน *</label>
-                        <input placeholder="เช่น ใบงานเรื่องแรง" className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.title} onChange={e => setNewForm({...newForm, title: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">ชื่อนักเรียน *</label>
-                        <input placeholder="ชื่อ-นามสกุล" className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.student} onChange={e => setNewForm({...newForm, student: e.target.value})} />
-                    </div>
-                    <div className="flex gap-4">
-                        <div className="flex-1">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">ห้อง</label>
-                            <input className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.class} onChange={e => setNewForm({...newForm, class: e.target.value})} />
-                        </div>
-                        <div className="w-24">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">เลขที่</label>
-                            <input placeholder="21" className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.no} onChange={e => setNewForm({...newForm, no: e.target.value})} />
-                        </div>
-                    </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => !isSaving && setShowUploadForm(false)}></div>
+          <form onSubmit={submitNew} className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden">
+            <div className="p-8 md:p-10">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black">ส่งใบงานใหม่</h3>
+                <button type="button" onClick={() => setShowUploadForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><Icon name="x" size={24} /></button>
+              </div>
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">หัวข้อใบงาน *</label>
+                    <input required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:border-blue-500 outline-none" placeholder="เช่น การทดลองเรื่องแรง" value={newForm.title} onChange={e => setNewForm({...newForm, title: e.target.value})} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">ชื่อนักเรียน *</label>
+                    <input required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:border-blue-500 outline-none" placeholder="ชื่อ-นามสกุล" value={newForm.student} onChange={e => setNewForm({...newForm, student: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">ห้อง</label>
+                    <input className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:border-blue-500 outline-none" value={newForm.class} onChange={e => setNewForm({...newForm, class: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">เลขที่</label>
+                    <input className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:border-blue-500 outline-none" placeholder="21" value={newForm.no} onChange={e => setNewForm({...newForm, no: e.target.value})} />
+                  </div>
                 </div>
-
-                <div className="mb-8">
-                    <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-2 block">รูปภาพใบงาน *</label>
-                    {uploadedImageUrl ? (
-                        <div className="relative rounded-2xl overflow-hidden h-40 border-2 border-blue-100">
-                            <img src={uploadedImageUrl} className="w-full h-full object-cover" />
-                            <button onClick={() => setUploadedImageUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600 transition"><Icon name="x" size={14} /></button>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-3 ml-1">รูปภาพใบงาน *</label>
+                  {uploadedImageUrl ? (
+                    <div className="relative group rounded-3xl overflow-hidden aspect-video border-4 border-blue-50 shadow-inner">
+                      <img src={uploadedImageUrl} className="w-full h-full object-cover" />
+                      <button type="button" onClick={() => setUploadedImageUrl(null)} className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full shadow-xl"><Icon name="x" size={16} /></button>
+                    </div>
+                  ) : (
+                    <div className="relative border-4 border-dashed border-slate-100 rounded-[2rem] p-8 bg-slate-50/50 flex flex-col items-center justify-center min-h-[160px]">
+                      {isUploading ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <Icon name="loader" size={32} className="text-blue-500 animate-spin" />
+                          <p className="text-blue-500 font-bold">กำลังอัปโหลดรูปภาพ...</p>
                         </div>
-                    ) : (
-                        <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center bg-slate-50">
-                            {isUploading ? (
-                                <div className="flex flex-col items-center gap-2">
-                                    <Icon name="loader" size={24} className="text-blue-500 animate-spin" />
-                                    <p className="text-sm text-blue-500 font-bold">กำลังอัปโหลดรูปภาพ...</p>
-                                </div>
-                            ) : (
-                                <UploadButton<OurFileRouter, "imageUploader">
-                                    endpoint="imageUploader"
-                                    onUploadBegin={() => setIsUploading(true)}
-                                    onClientUploadComplete={(res) => {
-                                        setIsUploading(false);
-                                        setUploadedImageUrl(res[0].url);
-                                    }}
-                                    onUploadError={(error: Error) => {
-                                        setIsUploading(false);
-                                        alert(`เกิดข้อผิดพลาด: ${error.message}`);
-                                    }}
-                                    content={{
-                                        button({ ready }) {
-                                          if (ready) return "เลือกรูปภาพ";
-                                          return "กำลังโหลด...";
-                                        },
-                                        allowedContent: "รูปภาพ (สูงสุด 4MB)"
-                                    }}
-                                    appearance={{
-                                        button: "bg-blue-600 px-6 py-2 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-all",
-                                        allowedContent: "text-[10px] text-slate-400 mt-2"
-                                    }}
-                                />
-                            )}
-                        </div>
-                    )}
+                      ) : (
+                        <UploadButton<OurFileRouter, "imageUploader">
+                          endpoint="imageUploader"
+                          onUploadBegin={() => setIsUploading(true)}
+                          onClientUploadComplete={(res) => { setIsUploading(false); setUploadedImageUrl(res[0].url); }}
+                          onUploadError={(error: Error) => { setIsUploading(false); alert(`Error: ${error.message}`); }}
+                          appearance={{ button: "bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all", allowedContent: "hidden" }}
+                          content={{ button: "เลือกรูปภาพ" }}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
-
-                <div className="flex gap-3">
-                    <button 
-                        onClick={submitNew} 
-                        disabled={isUploading}
-                        className={`flex-1 py-4 rounded-2xl font-bold shadow-lg transition ${
-                            isUploading ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                    >
-                        {isUploading ? 'รออัปโหลดรูปภาพ...' : 'ส่งใบงาน'}
-                    </button>
-                    <button 
-                        onClick={() => { setShowUploadForm(false); setUploadedImageUrl(null); setIsUploading(false); }} 
-                        className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition"
-                    >
-                        ยกเลิก
-                    </button>
-                </div>
+              </div>
             </div>
+            <div className="p-6 bg-slate-50 flex gap-4">
+              <button type="button" onClick={() => setShowUploadForm(false)} className="flex-1 py-4 font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-colors">ยกเลิก</button>
+              <button type="submit" disabled={isUploading || isSaving} className={`flex-[2] py-4 rounded-2xl font-black text-white shadow-xl transition-all ${isUploading || isSaving ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {isSaving ? 'กำลังบันทึก...' : 'ส่งใบงานทันที'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
