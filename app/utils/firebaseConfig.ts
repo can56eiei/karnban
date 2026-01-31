@@ -1,4 +1,3 @@
-// app/utils/firebaseConfig.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
@@ -10,12 +9,12 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  // เพิ่มบรรทัดนี้เพื่อแก้ปัญหา Can't determine Firebase Database URL
+  // *** ต้องมีบรรทัดนี้ ***
   databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL, 
 };
 
-// ใช้เทคนิคนี้เพื่อไม่ให้ Next.js สร้าง App ซ้ำซ้อนตอน Build
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// เช็คว่าเคยมี App รันอยู่หรือยัง ถ้าไม่มีให้สร้างใหม่
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const database = getDatabase(app);
 export const storage = getStorage(app);
