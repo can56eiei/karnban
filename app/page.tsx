@@ -2,8 +2,8 @@
 import { useState, useEffect, ReactNode } from "react";
 import { database } from "@/app/utils/firebaseConfig"; 
 import { ref, onValue, push, set, remove, update } from "firebase/database";
-import { UploadButton } from "@uploadthing/react"; // ต้องติดตั้ง @uploadthing/react
-import type { OurFileRouter } from "@/app/api/uploadthing/core"; // ปรับ path ตามโปรเจกต์จริง
+import { UploadButton } from "@uploadthing/react";
+import type { OurFileRouter } from "@/app/api/uploadthing/core";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type StatusType = "pending" | "approved" | "rejected";
@@ -28,6 +28,7 @@ const Icon = ({ name, size = 18, className = "" }: { name: string, size?: number
     lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>,
     trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2-2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></>,
     logout: <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />,
+    loader: <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -42,12 +43,13 @@ export default function HomeworkRealtime() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [newForm, setNewForm] = useState({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
 
   // ── Admin Login State ──
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
-  const ADMIN_PASSWORD = "admin123"; // เปลี่ยนรหัสผ่านตรงนี้ได้ครับ
+  const ADMIN_PASSWORD = "admin123";
 
   // ── 1. Real-time Sync with Firebase ──
   useEffect(() => {
@@ -79,24 +81,31 @@ export default function HomeworkRealtime() {
   };
 
   const submitNew = async () => {
-    if (!newForm.title || !newForm.student || !uploadedImageUrl) {
-        alert("กรุณากรอกข้อมูลและรอให้อัปโหลดรูปภาพเสร็จสิ้น");
-        return;
+    // ตรวจสอบข้อมูล
+    if (!newForm.title.trim()) return alert("กรุณาใส่หัวข้อใบงาน");
+    if (!newForm.student.trim()) return alert("กรุณาใส่ชื่อนักเรียน");
+    if (!uploadedImageUrl) return alert("กรุณาอัปโหลดรูปภาพให้เสร็จสิ้นก่อนส่ง");
+
+    try {
+      const submissionsRef = ref(database, 'submissions');
+      const newSubmissionRef = push(submissionsRef);
+      
+      await set(newSubmissionRef, {
+        ...newForm,
+        status: "pending",
+        date: new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }),
+        thumb: uploadedImageUrl,
+      });
+
+      // Reset Form
+      setNewForm({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
+      setUploadedImageUrl(null);
+      setShowUploadForm(false);
+      alert("ส่งใบงานสำเร็จแล้ว!");
+    } catch (error) {
+      console.error("Firebase Error:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
-
-    const submissionsRef = ref(database, 'submissions');
-    const newSubmissionRef = push(submissionsRef);
-    
-    await set(newSubmissionRef, {
-      ...newForm,
-      status: "pending",
-      date: new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }),
-      thumb: uploadedImageUrl,
-    });
-
-    setNewForm({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
-    setUploadedImageUrl(null);
-    setShowUploadForm(false);
   };
 
   const updateStatus = (id: string, newStatus: StatusType) => {
@@ -112,7 +121,7 @@ export default function HomeworkRealtime() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 font-sans">
       <header className="max-w-6xl mx-auto flex justify-between items-center mb-8 bg-white p-4 rounded-2xl shadow-sm border">
         <div className="flex items-center gap-2">
             <div className="bg-blue-600 p-2 rounded-lg text-white"><Icon name="check" size={20} /></div>
@@ -133,9 +142,9 @@ export default function HomeworkRealtime() {
 
       <main className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-bold text-slate-700">รายการใบงานทั้งหมด</h2>
+            <h2 className="text-lg font-bold text-slate-700">รายการใบงาน</h2>
             <button onClick={() => setShowUploadForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition">
-                <Icon name="plus" size={18} /> เพิ่มใบงาน
+                <Icon name="plus" size={18} /> ส่งใบงานใหม่
             </button>
         </div>
 
@@ -206,11 +215,11 @@ export default function HomeworkRealtime() {
                 
                 <div className="space-y-4 mb-6">
                     <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">หัวข้อใบงาน</label>
+                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">หัวข้อใบงาน *</label>
                         <input placeholder="เช่น ใบงานเรื่องแรง" className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.title} onChange={e => setNewForm({...newForm, title: e.target.value})} />
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">ชื่อนักเรียน</label>
+                        <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">ชื่อนักเรียน *</label>
                         <input placeholder="ชื่อ-นามสกุล" className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500 outline-none transition" value={newForm.student} onChange={e => setNewForm({...newForm, student: e.target.value})} />
                     </div>
                     <div className="flex gap-4">
@@ -226,35 +235,64 @@ export default function HomeworkRealtime() {
                 </div>
 
                 <div className="mb-8">
-                    <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-2 block">รูปภาพใบงาน</label>
+                    <label className="text-xs font-bold text-slate-400 uppercase ml-1 mb-2 block">รูปภาพใบงาน *</label>
                     {uploadedImageUrl ? (
                         <div className="relative rounded-2xl overflow-hidden h-40 border-2 border-blue-100">
                             <img src={uploadedImageUrl} className="w-full h-full object-cover" />
                             <button onClick={() => setUploadedImageUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600 transition"><Icon name="x" size={14} /></button>
                         </div>
                     ) : (
-                        <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 hover:border-blue-400 transition bg-slate-50">
-                            <UploadButton<OurFileRouter, "imageUploader">
-                                endpoint="imageUploader"
-                                onClientUploadComplete={(res) => {
-                                    setUploadedImageUrl(res[0].url);
-                                    alert("อัปโหลดสำเร็จ!");
-                                }}
-                                onUploadError={(error: Error) => {
-                                    alert(`เกิดข้อผิดพลาด: ${error.message}`);
-                                }}
-                                appearance={{
-                                    button: "bg-blue-600 px-4 py-2 rounded-xl font-bold text-sm",
-                                    allowedContent: "text-[10px] text-slate-400 mt-2"
-                                }}
-                            />
+                        <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center bg-slate-50">
+                            {isUploading ? (
+                                <div className="flex flex-col items-center gap-2">
+                                    <Icon name="loader" size={24} className="text-blue-500 animate-spin" />
+                                    <p className="text-sm text-blue-500 font-bold">กำลังอัปโหลดรูปภาพ...</p>
+                                </div>
+                            ) : (
+                                <UploadButton<OurFileRouter, "imageUploader">
+                                    endpoint="imageUploader"
+                                    onUploadBegin={() => setIsUploading(true)}
+                                    onClientUploadComplete={(res) => {
+                                        setIsUploading(false);
+                                        setUploadedImageUrl(res[0].url);
+                                    }}
+                                    onUploadError={(error: Error) => {
+                                        setIsUploading(false);
+                                        alert(`เกิดข้อผิดพลาด: ${error.message}`);
+                                    }}
+                                    content={{
+                                        button({ ready }) {
+                                          if (ready) return "เลือกรูปภาพ";
+                                          return "กำลังโหลด...";
+                                        },
+                                        allowedContent: "รูปภาพ (สูงสุด 4MB)"
+                                    }}
+                                    appearance={{
+                                        button: "bg-blue-600 px-6 py-2 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-all",
+                                        allowedContent: "text-[10px] text-slate-400 mt-2"
+                                    }}
+                                />
+                            )}
                         </div>
                     )}
                 </div>
 
                 <div className="flex gap-3">
-                    <button onClick={submitNew} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">ส่งใบงาน</button>
-                    <button onClick={() => { setShowUploadForm(false); setUploadedImageUrl(null); }} className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition">ยกเลิก</button>
+                    <button 
+                        onClick={submitNew} 
+                        disabled={isUploading}
+                        className={`flex-1 py-4 rounded-2xl font-bold shadow-lg transition ${
+                            isUploading ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                    >
+                        {isUploading ? 'รออัปโหลดรูปภาพ...' : 'ส่งใบงาน'}
+                    </button>
+                    <button 
+                        onClick={() => { setShowUploadForm(false); setUploadedImageUrl(null); setIsUploading(false); }} 
+                        className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition"
+                    >
+                        ยกเลิก
+                    </button>
                 </div>
             </div>
         </div>
