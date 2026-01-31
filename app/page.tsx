@@ -49,6 +49,16 @@ const CATEGORIES: Category[] = [
   { id: "social", label: "สังคมศึกษา", emoji: "🌍", color: "#14b8a6" },
 ];
 
+const INITIAL_SUBMISSIONS: Submission[] = [
+  { id: 1, title: "ใบงานเรื่องงานและพลังงาน", student: "ณพล วิรัชติ", class: "ม.4/8", no: 21, category: "physics", status: "approved", date: "31 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw1/400/300" },
+  { id: 2, title: "แบบทดสอบสมการ กรณีที่ 2", student: "สิรินทร์ โรมัน", class: "ม.5/3", no: 7, category: "math", status: "pending", date: "30 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw2/400/300" },
+  { id: 3, title: "รายงานการทดลอง เรื่องอิฐ", student: "วิรุฒน์ คงสุข", class: "ม.4/8", no: 15, category: "chemistry", status: "pending", date: "29 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw3/400/300" },
+  { id: 4, title: "การแบ่งเซลล์ มิโตซิส", student: "พรรณ์พิมพ์ เจ้าPhoto", class: "ม.5/3", no: 22, category: "biology", status: "approved", date: "28 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw4/400/300" },
+  { id: 5, title: "เรียบเรียงเรื่อง Present Perfect", student: " เอมิลี่ สมิทธ์", class: "ม.4/8", no: 3, category: "english", status: "rejected", date: "27 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw5/400/300" },
+  { id: 6, title: "วรรณยุกต์และตัวสะกด", student: "จิตรลดา พลับ", class: "ม.5/3", no: 11, category: "thai", status: "approved", date: "26 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw6/400/300" },
+  { id: 7, title: "สงงครามโลกครั้งที่ 2 สาเหตุ", student: "ภัทรวงศ์ สุขเดียว", class: "ม.4/8", no: 9, category: "history", status: "pending", date: "25 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw7/400/300" },
+  { id: 8, title: "การเปลี่ยนแปลงสังคม ยุคโลกาภิวัตน์", student: "ปาลิตา กรุงไทย", class: "ม.5/3", no: 5, category: "social", status: "approved", date: "24 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw8/400/300" },
+];
 
 // ─── ICONS (inline SVG) ──────────────────────────────────────────────────────
 const Icon = ({ name, size = 18, className = "" }: IconProps) => {
