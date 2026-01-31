@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { UploadButton } from "@/utils/uploadthing";
+import { UploadButton } from "./utils/uploadthing"; // ใช้ ./ แทน @/ เพื่อความชัวร์
 import { 
   Plus, 
   BookOpen, 
