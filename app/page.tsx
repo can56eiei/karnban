@@ -6,7 +6,7 @@ type StatusType = "pending" | "approved" | "rejected";
 type IconName =
   | "check" | "x" | "clock" | "shield" | "eye" | "plus"
   | "logout" | "copy" | "user" | "book" | "calendar"
-  | "filter" | "search" | "upload" | "arrow_left";
+  | "filter" | "search" | "upload" | "arrow_left" | "trash" | "lock";
 
 interface Category {
   id: string;
@@ -42,23 +42,13 @@ const CATEGORIES: Category[] = [
   { id: "physics", label: "ฟิสิกส์", emoji: "⚛️", color: "#3b82f6" },
   { id: "math", label: "คณิตศาสตร์", emoji: "📐", color: "#8b5cf6" },
   { id: "chemistry", label: "เคมี", emoji: "🧪", color: "#10b981" },
-  { id: "biology", label: "ชีববิทยา", emoji: "🌱", color: "#f59e0b" },
+  { id: "biology", label: "ชีว", emoji: "🌱", color: "#f59e0b" },
   { id: "english", label: "ภาษาอังกฤษ", emoji: "🇬🇧", color: "#ef4444" },
   { id: "thai", label: "ภาษาไทย", emoji: "🇹🇭", color: "#ec4899" },
   { id: "history", label: "ประวัติศาสตร์", emoji: "📜", color: "#64748b" },
   { id: "social", label: "สังคมศึกษา", emoji: "🌍", color: "#14b8a6" },
 ];
 
-const INITIAL_SUBMISSIONS: Submission[] = [
-  { id: 1, title: "ใบงานเรื่องงานและพลังงาน", student: "ณพล วิรัชติ", class: "ม.4/8", no: 21, category: "physics", status: "approved", date: "31 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw1/400/300" },
-  { id: 2, title: "แบบทดสอบสมการ กรณีที่ 2", student: "สิรินทร์ โรมัน", class: "ม.5/3", no: 7, category: "math", status: "pending", date: "30 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw2/400/300" },
-  { id: 3, title: "รายงานการทดลอง เรื่องอิฐ", student: "วิรุฒน์ คงสุข", class: "ม.4/8", no: 15, category: "chemistry", status: "pending", date: "29 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw3/400/300" },
-  { id: 4, title: "การแบ่งเซลล์ มิโตซิส", student: "พรรณ์พิมพ์ เจ้าPhoto", class: "ม.5/3", no: 22, category: "biology", status: "approved", date: "28 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw4/400/300" },
-  { id: 5, title: "เรียบเรียงเรื่อง Present Perfect", student: " เอมิลี่ สมิทธ์", class: "ม.4/8", no: 3, category: "english", status: "rejected", date: "27 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw5/400/300" },
-  { id: 6, title: "วรรณยุกต์และตัวสะกด", student: "จิตรลดา พลับ", class: "ม.5/3", no: 11, category: "thai", status: "approved", date: "26 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw6/400/300" },
-  { id: 7, title: "สงงครามโลกครั้งที่ 2 สาเหตุ", student: "ภัทรวงศ์ สุขเดียว", class: "ม.4/8", no: 9, category: "history", status: "pending", date: "25 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw7/400/300" },
-  { id: 8, title: "การเปลี่ยนแปลงสังคม ยุคโลกาภิวัตน์", student: "ปาลิตา กรุงไทย", class: "ม.5/3", no: 5, category: "social", status: "approved", date: "24 ม.ค. 2026", thumb: "https://picsum.photos/seed/hw8/400/300" },
-];
 
 // ─── ICONS (inline SVG) ──────────────────────────────────────────────────────
 const Icon = ({ name, size = 18, className = "" }: IconProps) => {
@@ -78,6 +68,8 @@ const Icon = ({ name, size = 18, className = "" }: IconProps) => {
     search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
     upload: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></>,
     arrow_left: <><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></>,
+    trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></>,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -113,9 +105,17 @@ export default function HomeworkHost() {
   const [adminTab, setAdminTab] = useState("pending"); // pending | all
   const [copied, setCopied] = useState(false);
 
-  // ── New submission form (admin upload mock) ──
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [newForm, setNewForm] = useState({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
+
+  // ── Admin login ──
+  const ADMIN_PASSWORD = "admin123";
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loginError, setLoginError] = useState(false);
+
+  // ── Confirm delete ──
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // ── Filtered list ──
   const filtered = useMemo(() => {
@@ -132,6 +132,22 @@ export default function HomeworkHost() {
   // ── Actions ──
   const approve = (id: number) => setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: "approved" as StatusType } : s)));
   const reject = (id: number) => setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: "rejected" as StatusType } : s)));
+  const deleteItem = (id: number) => {
+    setSubmissions((prev) => prev.filter((s) => s.id !== id));
+    setConfirmDeleteId(null);
+    if (detailItem?.id === id) setDetailItem(null);
+  };
+  const handleLoginAttempt = () => {
+    if (passwordInput === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      setShowLoginModal(false);
+      setPasswordInput("");
+      setLoginError(false);
+    } else {
+      setLoginError(true);
+      setPasswordInput("");
+    }
+  };
   const submitNew = () => {
     if (!newForm.title || !newForm.student) return;
     setSubmissions((prev) => [
@@ -205,6 +221,11 @@ export default function HomeworkHost() {
                     </button>
                   </>
                 )}
+                {isAdmin && (
+                  <button onClick={() => setConfirmDeleteId(detailItem.id)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition" style={{ background: "#fee2e2", color: "#ef4444" }}>
+                    <Icon name="trash" size={14} /> ลบใบงาน
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -238,7 +259,7 @@ export default function HomeworkHost() {
               </>
             )}
             {!isAdmin ? (
-              <button onClick={() => setIsAdmin(true)} className="text-sm font-bold px-4 py-1.5 rounded-lg text-white transition" style={{ background: "#3b82f6" }}>เข้า Admin</button>
+              <button onClick={() => { setShowLoginModal(true); setLoginError(false); }} className="text-sm font-bold px-4 py-1.5 rounded-lg text-white transition flex items-center gap-1.5" style={{ background: "#3b82f6" }}><Icon name="lock" size={13} /> เข้า Admin</button>
             ) : (
               <button onClick={() => { setIsAdmin(false); setView("browse"); }} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-500 transition">
                 <Icon name="logout" size={14} /> ออก
@@ -249,6 +270,61 @@ export default function HomeworkHost() {
       </nav>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+
+        {/* ── LOGIN MODAL ── */}
+        {showLoginModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+              <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg p-2 text-white" style={{ background: "#3b82f6" }}><Icon name="lock" size={18} /></div>
+                  <h2 className="font-extrabold text-slate-800">เข้า Admin</h2>
+                </div>
+                <button onClick={() => { setShowLoginModal(false); setLoginError(false); setPasswordInput(""); }} className="text-slate-400 hover:text-slate-600"><Icon name="x" size={18} /></button>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">กรุณาใส่รหัสผ่านเพื่อเข้าสู่ Admin Panel</p>
+              <label className="block text-xs font-bold text-slate-500 mb-1">รหัสผ่าน</label>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => { setPasswordInput(e.target.value); setLoginError(false); }}
+                onKeyDown={(e) => e.key === "Enter" && handleLoginAttempt()}
+                placeholder="••••••••"
+                className="w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-300 transition"
+                style={{ borderColor: loginError ? "#ef4444" : "#e2e8f0" }}
+                autoFocus
+              />
+              {loginError && (
+                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><Icon name="x" size={11} /> รหัสผ่านไม่ถูกต้อง</p>
+              )}
+              <div className="flex gap-2 mt-5">
+                <button onClick={handleLoginAttempt} className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white transition" style={{ background: "#3b82f6" }}>เข้าสู่ระบบ</button>
+                <button onClick={() => { setShowLoginModal(false); setLoginError(false); setPasswordInput(""); }} className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-500 transition" style={{ background: "#f1f5f9" }}>ยกเลิก</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CONFIRM DELETE MODAL ── */}
+        {confirmDeleteId !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg p-2 text-white" style={{ background: "#ef4444" }}><Icon name="trash" size={18} /></div>
+                  <h2 className="font-extrabold text-slate-800">ยืนยันลบ</h2>
+                </div>
+                <button onClick={() => setConfirmDeleteId(null)} className="text-slate-400 hover:text-slate-600"><Icon name="x" size={18} /></button>
+              </div>
+              <p className="text-sm text-slate-500 mb-1">คุณต้องการลบใบงานนี้ใช่ไหม?</p>
+              <p className="text-xs text-slate-400 mb-5">การกระทำนี้จะไม่สามารถเปลี่ยนกลับได้</p>
+              <div className="flex gap-2">
+                <button onClick={() => deleteItem(confirmDeleteId)} className="flex-1 py-2 rounded-lg text-sm font-bold text-white transition flex items-center justify-center gap-1.5" style={{ background: "#ef4444" }}><Icon name="trash" size={14} /> ลบเลย</button>
+                <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 rounded-lg text-sm font-bold text-slate-500 transition" style={{ background: "#f1f5f9" }}>ยกเลิก</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── ADMIN VIEW ── */}
         {view === "admin" && (
@@ -356,6 +432,7 @@ export default function HomeworkHost() {
                         </>
                       )}
                       <button onClick={() => setDetailItem(item)} className="p-1.5 rounded-lg transition" style={{ background: "#f1f5f9", color: "#64748b" }} title="ดูรายละเอียด"><Icon name="eye" size={15} /></button>
+                      <button onClick={() => setConfirmDeleteId(item.id)} className="p-1.5 rounded-lg transition hover:bg-red-100" style={{ background: "#f1f5f9", color: "#ef4444" }} title="ลบ"><Icon name="trash" size={15} /></button>
                     </div>
                   </div>
                 );
