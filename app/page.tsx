@@ -1,9 +1,13 @@
 "use client";
-import { useState, useEffect, ReactNode } from "react";
-import { database } from "@/app/utils/firebaseConfig"; 
-import { ref, onValue, push, set, remove, update } from "firebase/database";
-import { UploadButton } from "@uploadthing/react";
-import type { OurFileRouter } from "@/app/api/uploadthing/core";
+export const dynamic = "force-dynamic";
+import { useState, useEffect, ReactNode, useRef } from "react";
+import { database, storage } from "@/app/utils/firebaseConfig"; // นำเข้า storage
+import { ref as dbRef, onValue, push, set, remove, update } from "firebase/database";
+import { 
+  ref as storageRef, 
+  uploadBytesResumable, 
+  getDownloadURL 
+} from "firebase/storage"; // นำเข้า storage functions
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type StatusType = "pending" | "approved" | "rejected";
@@ -29,6 +33,7 @@ const Icon = ({ name, size = 18, className = "" }: { name: string, size?: number
     trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2-2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></>,
     logout: <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />,
     loader: <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />,
+    image: <><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -42,19 +47,22 @@ export default function HomeworkRealtime() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // ติดตามเปอร์เซ็นต์
   const [isSaving, setIsSaving] = useState(false);
   const [newForm, setNewForm] = useState({ title: "", student: "", class: "ม.4/8", no: "", category: "physics" });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const ADMIN_PASSWORD = "admin123";
 
   // ── 1. Real-time Sync ──
   useEffect(() => {
-    const submissionsRef = ref(database, 'submissions');
-    const unsubscribe = onValue(submissionsRef, (snapshot) => {
+    const submissionsRefPath = dbRef(database, 'submissions');
+    const unsubscribe = onValue(submissionsRefPath, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const list = Object.entries(data).map(([key, value]: [string, any]) => ({
@@ -69,7 +77,44 @@ export default function HomeworkRealtime() {
     return () => unsubscribe();
   }, []);
 
-  // ── 2. Admin Actions ──
+  // ── 2. Firebase Storage Upload ──
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // ตรวจสอบขนาดไฟล์ (ไม่ควรเกิน 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert("ไฟล์ใหญ่เกินไป กรุณาเลือกไฟล์ขนาดไม่เกิน 5MB");
+        return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    // สร้างชื่อไฟล์แบบสุ่มป้องกันชื่อซ้ำ
+    const fileName = `${Date.now()}_${file.name}`;
+    const storagePath = storageRef(storage, `homeworks/${fileName}`);
+    const uploadTask = uploadBytesResumable(storagePath, file);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(Math.round(progress));
+      }, 
+      (error) => {
+        console.error("Upload error:", error);
+        alert("อัปโหลดรูปภาพไม่สำเร็จ");
+        setIsUploading(false);
+      }, 
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setUploadedImageUrl(downloadURL);
+        setIsUploading(false);
+      }
+    );
+  };
+
+  // ── 3. Admin Actions ──
   const handleLogin = () => {
     if (passwordInput === ADMIN_PASSWORD) {
       setIsAdmin(true);
@@ -81,30 +126,30 @@ export default function HomeworkRealtime() {
   };
 
   const updateStatus = (id: string, newStatus: StatusType) => {
-    const itemRef = ref(database, `submissions/${id}`);
+    const itemRef = dbRef(database, `submissions/${id}`);
     update(itemRef, { status: newStatus });
   };
 
   const deleteItem = (id: string) => {
     if (confirm("ยืนยันการลบใบงานนี้?")) {
-      const itemRef = ref(database, `submissions/${id}`);
+      const itemRef = dbRef(database, `submissions/${id}`);
       remove(itemRef);
     }
   };
 
-  // ── 3. Submission Actions ──
+  // ── 4. Submission Actions ──
   const submitNew = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving || isUploading) return;
     if (!newForm.title.trim() || !newForm.student.trim() || !uploadedImageUrl) {
-        alert("กรุณากรอกข้อมูลให้ครบและรออัปโหลดรูปภาพครับ");
+        alert("กรุณากรอกข้อมูลให้ครบและรอรูปภาพอัปโหลดเสร็จครับ");
         return;
     }
 
     setIsSaving(true);
     try {
-      const submissionsRef = ref(database, 'submissions');
-      const newSubmissionRef = push(submissionsRef);
+      const submissionsRefPath = dbRef(database, 'submissions');
+      const newSubmissionRef = push(submissionsRefPath);
       await set(newSubmissionRef, {
         ...newForm,
         status: "pending",
@@ -124,6 +169,7 @@ export default function HomeworkRealtime() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* ... Navigation (เหมือนเดิม) ... */}
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b">
         <div className="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
           <div className="flex items-center gap-2 font-black text-xl text-blue-600">
@@ -148,13 +194,14 @@ export default function HomeworkRealtime() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h2 className="text-2xl font-bold">ใบงานที่ส่งแล้ว</h2>
-            <p className="text-slate-500 text-sm">ข้อมูลอัปเดตแบบ Real-time ทันทีที่มีคนส่ง</p>
+            <p className="text-slate-500 text-sm">อัปเดตผ่าน Firebase Realtime ทันที</p>
           </div>
           <button onClick={() => setShowUploadForm(true)} className="w-full md:w-auto bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2">
             <Icon name="plus" size={20} /> ส่งใบงานใหม่
           </button>
         </div>
 
+        {/* ── Submissions Grid ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {submissions.map((item) => (
             <div key={item.id} className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 group">
@@ -193,18 +240,20 @@ export default function HomeworkRealtime() {
         </div>
       </main>
 
+      {/* ── Login Modal (เหมือนเดิม) ── */}
       {showLoginModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowLoginModal(false)}></div>
           <div className="relative bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl">
             <h3 className="text-2xl font-black mb-2">Admin Login</h3>
-            <p className="text-slate-500 text-sm mb-6">รหัสผ่านเริ่มต้น: admin123</p>
-            <input type="password" px-5 py-4 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 mb-4 outline-none focus:border-blue-500" placeholder="••••••••" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus />
+            <p className="text-slate-500 text-sm mb-6">รหัสผ่าน: admin123</p>
+            <input type="password" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 mb-4 outline-none focus:border-blue-500" placeholder="••••••••" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus />
             <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg">เข้าสู่ระบบ</button>
           </div>
         </div>
       )}
 
+      {/* ── Upload Form (เปลี่ยนจุดนี้) ── */}
       {showUploadForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => !isSaving && setShowUploadForm(false)}></div>
@@ -214,6 +263,7 @@ export default function HomeworkRealtime() {
                 <h3 className="text-2xl font-black">ส่งใบงานใหม่</h3>
                 <button type="button" onClick={() => setShowUploadForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><Icon name="x" size={24} /></button>
               </div>
+              
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="md:col-span-2">
@@ -233,38 +283,48 @@ export default function HomeworkRealtime() {
                     <input className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 focus:border-blue-500 outline-none" placeholder="21" value={newForm.no} onChange={e => setNewForm({...newForm, no: e.target.value})} />
                   </div>
                 </div>
+
+                {/* ── จุดที่เปลี่ยน: ระบบอัปโหลดรูปภาพ ── */}
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase mb-3 ml-1">รูปภาพใบงาน *</label>
                   {uploadedImageUrl ? (
                     <div className="relative group rounded-3xl overflow-hidden aspect-video border-4 border-blue-50 shadow-inner">
-                      <img src={uploadedImageUrl} className="w-full h-full object-cover" />
+                      <img src={uploadedImageUrl} className="w-full h-full object-cover" alt="preview" />
                       <button type="button" onClick={() => setUploadedImageUrl(null)} className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full shadow-xl"><Icon name="x" size={16} /></button>
                     </div>
                   ) : (
-                    <div className="relative border-4 border-dashed border-slate-100 rounded-[2rem] p-8 bg-slate-50/50 flex flex-col items-center justify-center min-h-[160px]">
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="relative border-4 border-dashed border-slate-100 rounded-[2rem] p-8 bg-slate-50/50 flex flex-col items-center justify-center min-h-[160px] cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                      
                       {isUploading ? (
                         <div className="flex flex-col items-center gap-3">
-                          <Icon name="loader" size={32} className="text-blue-500 animate-spin" />
-                          <p className="text-blue-500 font-bold">กำลังอัปโหลดรูปภาพ...</p>
+                          <div className="relative w-16 h-16 flex items-center justify-center">
+                             <Icon name="loader" size={32} className="text-blue-500 animate-spin absolute" />
+                             <span className="text-[10px] font-bold text-blue-600">{uploadProgress}%</span>
+                          </div>
+                          <p className="text-blue-500 font-bold">กำลังอัปโหลด...</p>
                         </div>
                       ) : (
-                        <UploadButton<OurFileRouter, "imageUploader">
-                          endpoint="imageUploader"
-                          onUploadBegin={() => setIsUploading(true)}
-                          onClientUploadComplete={(res) => { setIsUploading(false); setUploadedImageUrl(res[0].url); }}
-                          onUploadError={(error: Error) => { setIsUploading(false); alert(`Error: ${error.message}`); }}
-                          appearance={{ button: "bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all", allowedContent: "hidden" }}
-                          content={{ button: "เลือกรูปภาพ" }}
-                        />
+                        <div className="flex flex-col items-center gap-2">
+                           <div className="bg-blue-100 text-blue-600 p-4 rounded-full mb-2">
+                              <Icon name="image" size={32} />
+                           </div>
+                           <p className="font-bold text-slate-600">คลิกเพื่อเลือกรูปภาพ</p>
+                           <p className="text-xs text-slate-400">ขนาดไฟล์ไม่เกิน 5MB</p>
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
+
             <div className="p-6 bg-slate-50 flex gap-4">
               <button type="button" onClick={() => setShowUploadForm(false)} className="flex-1 py-4 font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-colors">ยกเลิก</button>
-              <button type="submit" disabled={isUploading || isSaving} className={`flex-[2] py-4 rounded-2xl font-black text-white shadow-xl transition-all ${isUploading || isSaving ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+              <button type="submit" disabled={isUploading || isSaving || !uploadedImageUrl} className={`flex-[2] py-4 rounded-2xl font-black text-white shadow-xl transition-all ${isUploading || isSaving || !uploadedImageUrl ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                 {isSaving ? 'กำลังบันทึก...' : 'ส่งใบงานทันที'}
               </button>
             </div>
